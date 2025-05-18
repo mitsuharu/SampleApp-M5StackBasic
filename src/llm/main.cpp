@@ -61,6 +61,8 @@ void setup()
     M5.Display.println("LLM start!");
 
     int band = 115200;
+    Serial.begin(band);
+
     int rxd = M5.getPin(m5::pin_name_t::port_c_rxd);
     int txd = M5.getPin(m5::pin_name_t::port_c_txd);
     Serial2.begin(115200, SERIAL_8N1, rxd, txd);
@@ -102,7 +104,9 @@ void setup()
     if (audio_work_id.isEmpty())
     {
         // エラー
-        M5.Display.println(">> failed to set up Audio\n");
+        M5.Display.println(">> failed to set up Audio");
+        while (1)
+            ;
     }
 
     // /* Begin voice assistant preset */
@@ -116,13 +120,10 @@ void setup()
     //         M5.Display.printf(">> Begin voice assistant failed\n");
     //     }
     // }
-
     // /* Register on ASR data callback function */
     // voice_assistant.onAsrDataInput(on_asr_data_input);
-
     // /* Register on LLM data callback function */
     // voice_assistant.onLlmDataInput(on_llm_data_input);
-
     // M5.Display.printf(">> Voice assistant ready\n");
 
     // // Setup TTS
@@ -181,7 +182,7 @@ void setup()
     m5_module_llm::ApiLlmSetupConfig_t llm_config;
     llm_config.max_token_len = 1023;
     llm_config.model = "qwen2.5-1.5B-p256-ax630c";
-    llm_config.input = {"llm.utf-8", whisper_work_id, kws_work_id};
+    llm_config.input = {whisper_work_id};
     llm_config.enoutput = true;
     llm_work_id = module_llm.llm.setup(llm_config);
     if (llm_work_id.isEmpty())
@@ -194,10 +195,8 @@ void setup()
 
     M5.Display.println(">> Setup melotts..");
     m5_module_llm::ApiMelottsSetupConfig_t melotts_config;
-    // IMPORTANT: Verify the correct Japanese MeloTTS model name for your M5Module-LLM.
-    // Using a placeholder "melotts_ja". Common ones might be "melotts-ja" or similar.
-    melotts_config.model = "melotts-ja-jp"; // Placeholder - VERIFY THIS MODEL NAME!
-    melotts_config.input = {llm_work_id};
+    melotts_config.model = "melotts-ja-jp";
+    melotts_config.input = {"tts.utf-8.stream", llm_work_id};
     melotts_config.response_format = "sys.pcm";
     melotts_config.enaudio = true;
     melotts_config.enoutput = false;
@@ -209,8 +208,6 @@ void setup()
         while (1)
             ;
     }
-
-    // M5.Display.println(">> Setup ok\n>> Say \"%s\" to wakeup\n", wake_up_keyword.c_str());
 
     M5.Display.println(">> Stand by OK");
 }
@@ -229,8 +226,8 @@ void loop()
         {
             // ウェイクワードを検出した
             M5.Display.setTextColor(TFT_GREENYELLOW);
-            M5.Display.printf(">> キーワード検出\n");
-            // M5.Display.printf(">> キーワード検出: %s\n", wake_up_keyword.c_str());
+            M5.Display.printf(">> キーワード検出: %s\n", wake_up_keyword.c_str());
+            Serial.printf(">> キーワード検出: %s\n", wake_up_keyword.c_str());
         }
         else if (msg.work_id == whisper_work_id && msg.object == "asr.utf-8")
         {
@@ -241,6 +238,7 @@ void loop()
 
             M5.Display.setTextColor(TFT_YELLOW);
             M5.Display.printf("<< %s\n", asr_result.c_str());
+            Serial.printf("<< %s\n", asr_result.c_str());
         }
         else if (msg.work_id == llm_work_id && msg.object == "llm.utf-8.stream")
         {
@@ -252,6 +250,7 @@ void loop()
 
             M5.Display.setTextColor(TFT_WHITE);
             M5.Display.printf("%s\n", llm_result.c_str());
+            Serial.printf("%s\n", llm_result.c_str());
         }
     }
 
