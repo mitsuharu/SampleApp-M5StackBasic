@@ -42,3 +42,7 @@ Temporary Items
 *.icloud
 
 # End of https://www.toptal.com/developers/gitignore/api/macos
+
+# for download_all_llm_debs.sh
+**/llm_debs/*
+**/llm_debs_resolved/*
