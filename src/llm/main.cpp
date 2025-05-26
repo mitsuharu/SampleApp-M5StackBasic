@@ -15,7 +15,7 @@ String tts_work_id;
 String asr_work_id;
 
 /* Must be capitalized */
-String wake_up_keyword = "OK";
+String wake_up_keyword = "HI STUCK";
 String wake_up_language = "en_US";
 String kws_work_id;
 String vad_work_id;
@@ -152,7 +152,7 @@ void setup()
     // 音声活動検出（VAD: Voice Activity Detection） を行う
     M5.Display.println(">> Setup vad..");
     m5_module_llm::ApiVadSetupConfig_t vad_config;
-    vad_config.input = {"sys.pcm"};
+    vad_config.input = {"sys.pcm", kws_work_id};
     vad_work_id = module_llm.vad.setup(vad_config, "vad_setup");
     if (vad_work_id.isEmpty())
     {
