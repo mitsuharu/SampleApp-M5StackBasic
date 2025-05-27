@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <SD.h>
 #include <M5Unified.h>
 #include <M5ModuleLLM.h>
 
@@ -8,7 +9,6 @@
 
 M5ModuleLLM module_llm;
 M5ModuleLLM_VoiceAssistant voice_assistant(&module_llm);
-// String llm_work_id;
 
 String audio_work_id;
 String tts_work_id;
@@ -22,6 +22,50 @@ String vad_work_id;
 String whisper_work_id;
 String llm_work_id;
 String melotts_work_id;
+
+bool usePrompt = false;
+String prompt_yaml = "/prompt.yaml";
+String prompt_md = "/prompt.md";
+String prompt_txt = "/prompt.txt";
+
+// SDカードからテキストファイルを読み込む関数
+String readPromptFromSD(String path)
+{
+    File file = SD.open(path);
+    if (!file || file.isDirectory())
+    {
+        Serial.println("Failed to open prompt file");
+        return "";
+    }
+
+    String content = "";
+    while (file.available())
+    {
+        content += (char)file.read();
+    }
+    file.close();
+    return content;
+}
+
+String getPromptFromSD()
+{
+    String prompt = readPromptFromSD(prompt_yaml);
+    if (prompt.length() > 0)
+    {
+        return prompt;
+    }
+    prompt = readPromptFromSD(prompt_md);
+    if (prompt.length() > 0)
+    {
+        return prompt;
+    }
+    prompt = readPromptFromSD(prompt_txt);
+    if (prompt.length() > 0)
+    {
+        return prompt;
+    }
+    return "";
+}
 
 /* On ASR data callback */
 void on_asr_data_input(String data, bool isFinish, int index)
@@ -63,6 +107,18 @@ void setup()
     int band = 115200;
     Serial.begin(band);
 
+    // SDカードの初期化
+    auto mosi = M5.getPin(m5::pin_name_t::sd_spi_mosi);
+    auto miso = M5.getPin(m5::pin_name_t::sd_spi_miso);
+    auto sclk = M5.getPin(m5::pin_name_t::sd_spi_sclk);
+    auto cs = M5.getPin(m5::pin_name_t::sd_spi_cs);
+    SPI.begin(sclk, miso, mosi, cs);
+    if (SD.begin(cs, SPI, 4000000))
+    {
+        M5.Display.println(">> mount SD Card");
+        usePrompt = true;
+    }
+
     int rxd = M5.getPin(m5::pin_name_t::port_c_rxd);
     int txd = M5.getPin(m5::pin_name_t::port_c_txd);
     Serial2.begin(115200, SERIAL_8N1, rxd, txd);
@@ -70,7 +126,7 @@ void setup()
     module_llm.begin(&Serial2);
 
     /* Make sure module is connected */
-    M5.Display.println(">> Check ModuleLLM connection..");
+    M5.Display.println(">> Connect ModuleLLM..");
     while (1)
     {
         if (module_llm.checkConnection())
@@ -84,7 +140,7 @@ void setup()
     module_llm.sys.reset();
 
     // /* Setup LLM module and save returned work id */
-    // M5.Display.println(">> Setup llm..");
+    // M5.Display.println(">> Set up llm..");
     // llm_work_id = module_llm.llm.setup();
     // String question = "技術書典って知ってる？";
     // M5.Display.printf("<< %s\n", question.c_str());
@@ -99,7 +155,7 @@ void setup()
     // M5.Display.printf(">> %s\n", response.c_str());
 
     // Setup Audio
-    M5.Display.println(">> Setup Audio..");
+    M5.Display.println(">> Set up Audio..");
     audio_work_id = module_llm.audio.setup();
     if (audio_work_id.isEmpty())
     {
@@ -127,7 +183,7 @@ void setup()
     // M5.Display.printf(">> Voice assistant ready\n");
 
     // // Setup TTS
-    // M5.Display.println(">> Setup TTS..\n");
+    // M5.Display.println(">> Set up TTS..\n");
     // m5_module_llm::ApiTtsSetupConfig_t tts_config;
     // tts_work_id = module_llm.tts.setup(tts_config, "tts_setup", "ja-JP");
     // if (tts_work_id.isEmpty())
@@ -137,7 +193,7 @@ void setup()
     // }
 
     // ウェイクワードを設定する
-    M5.Display.println(">> Setup kws..");
+    M5.Display.println(">> Set up kws..");
     m5_module_llm::ApiKwsSetupConfig_t kws_config;
     kws_config.kws = wake_up_keyword;
     kws_work_id = module_llm.kws.setup(kws_config, "kws_setup", wake_up_language);
@@ -150,7 +206,7 @@ void setup()
     }
 
     // 音声活動検出（VAD: Voice Activity Detection） を行う
-    M5.Display.println(">> Setup vad..");
+    M5.Display.println(">> Set up vad..");
     m5_module_llm::ApiVadSetupConfig_t vad_config;
     vad_config.input = {"sys.pcm", kws_work_id};
     vad_work_id = module_llm.vad.setup(vad_config, "vad_setup");
@@ -163,7 +219,7 @@ void setup()
     }
 
     // whisper で音声からテキストを受け取る
-    M5.Display.println(">> Setup whisper..");
+    M5.Display.println(">> Set up whisper..");
     m5_module_llm::ApiWhisperSetupConfig_t whisper_config;
     whisper_config.model = "whisper-tiny";
     whisper_config.input = {"sys.pcm", kws_work_id, vad_work_id};
@@ -178,8 +234,16 @@ void setup()
     }
 
     // LLM を設定する
-    M5.Display.println(">> Setup llm..");
+    M5.Display.println(">> Set up llm..");
     m5_module_llm::ApiLlmSetupConfig_t llm_config;
+    if (usePrompt)
+    {
+        llm_config.prompt = getPromptFromSD();
+        if (llm_config.prompt.length() > 0)
+        {
+            M5.Display.println(">> load prompt from SD..");
+        }
+    }
     llm_config.max_token_len = 1023;
     llm_config.model = "qwen2.5-1.5B-p256-ax630c";
     llm_config.input = {whisper_work_id};
@@ -193,7 +257,7 @@ void setup()
             ;
     }
 
-    M5.Display.println(">> Setup melotts..");
+    M5.Display.println(">> Set up melotts..");
     m5_module_llm::ApiMelottsSetupConfig_t melotts_config;
     melotts_config.model = "melotts-ja-jp";
     melotts_config.input = {"tts.utf-8.stream", llm_work_id};
@@ -209,7 +273,7 @@ void setup()
             ;
     }
 
-    M5.Display.println(">> Stand by OK");
+    M5.Display.printf(">> Go ready, say %s\n", wake_up_keyword);
 }
 
 void loop()
@@ -226,8 +290,7 @@ void loop()
         {
             // ウェイクワードを検出した
             M5.Display.setTextColor(TFT_GREENYELLOW);
-            M5.Display.printf(">> キーワード検出: %s\n", wake_up_keyword.c_str());
-            Serial.printf(">> キーワード検出: %s\n", wake_up_keyword.c_str());
+            M5.Display.printf(">> ウェイクワード: %s\n", wake_up_keyword.c_str());
         }
         else if (msg.work_id == whisper_work_id && msg.object == "asr.utf-8")
         {
