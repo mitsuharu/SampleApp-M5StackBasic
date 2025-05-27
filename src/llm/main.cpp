@@ -141,8 +141,12 @@ void setup()
 
     // /* Setup LLM module and save returned work id */
     // M5.Display.println(">> Set up llm..");
-    // llm_work_id = module_llm.llm.setup();
-    // String question = "技術書典って知ってる？";
+    // m5_module_llm::ApiLlmSetupConfig_t llm_config;
+    // llm_config.prompt = "";
+    // llm_config.max_token_len = 255; // Max value: 1024, recommended: 127
+    // llm_config.model = "qwen2.5-1.5B-p256-ax630c";
+    // llm_work_id = module_llm.llm.setup(llm_config);
+    // String question = "おすすめの本";
     // M5.Display.printf("<< %s\n", question.c_str());
     // String response = "";
     // module_llm.llm.inferenceAndWaitResult(
@@ -290,7 +294,7 @@ void loop()
         {
             // ウェイクワードを検出した
             M5.Display.setTextColor(TFT_GREENYELLOW);
-            M5.Display.printf(">> ウェイクワード: %s\n", wake_up_keyword.c_str());
+            M5.Display.printf(">> ウェイクワード %s を検出しました\n", wake_up_keyword.c_str());
         }
         else if (msg.work_id == whisper_work_id && msg.object == "asr.utf-8")
         {
